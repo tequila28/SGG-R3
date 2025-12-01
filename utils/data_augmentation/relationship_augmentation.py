@@ -14,6 +14,7 @@ from vllm import LLM, SamplingParams
 from huggingface_hub import snapshot_download
 import base64
 from io import BytesIO
+import re
 
 from prompt_data import PromptBuilder
 
@@ -73,6 +74,110 @@ def setup_distributed():
         print(f"Distributed setup failed: {e}")
         return 0, 1, 0
 
+def extract_dataset_name(dataset_path):
+    """
+    从数据集路径中提取数据集名称
+    
+    Args:
+        dataset_path: 数据集路径或名称
+        
+    Returns:
+        str: 数据集名称
+    """
+    # 处理本地路径
+    if os.path.exists(dataset_path):
+        # 如果是本地路径，使用最后一级目录名
+        return os.path.basename(dataset_path.rstrip('/'))
+    
+    # 处理HuggingFace数据集名称
+    if '/' in dataset_path:
+        # 提取用户名/数据集名 格式的名称
+        parts = dataset_path.split('/')
+        if len(parts) >= 2:
+            return parts[-1]  # 返回数据集名称部分
+    
+    # 如果是简单的数据集名称，直接返回
+    return dataset_path
+
+def adjust_output_paths(config):
+    """
+    根据数据集名称调整输出文件路径
+    
+    Args:
+        config: InferenceConfig对象
+        
+    Returns:
+        InferenceConfig: 调整后的配置对象
+    """
+    # 从数据集路径中提取数据集名称
+    dataset_name = extract_dataset_name(config.dataset_path)
+    
+    # 从原始路径中提取目录和基础文件名
+    def get_base_path(file_path):
+        directory = os.path.dirname(file_path)
+        filename = os.path.basename(file_path)
+        name, ext = os.path.splitext(filename)
+        return directory, name, ext
+    
+    # 为所有输出文件添加数据集名称后缀
+    output_dir, output_name, output_ext = get_base_path(config.output_file)
+    temp_dir, temp_name, temp_ext = get_base_path(config.temp_output_file)
+    stats_dir, stats_name, stats_ext = get_base_path(config.stats_file)
+    
+    # 确保目录存在
+    for directory in [output_dir, temp_dir, stats_dir]:
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+    
+    # 添加数据集名称后缀
+    config.output_file = os.path.join(output_dir if output_dir else ".", f"{output_name}_{dataset_name}{output_ext}")
+    config.temp_output_file = os.path.join(temp_dir if temp_dir else ".", f"{temp_name}_{dataset_name}{temp_ext}")
+    config.stats_file = os.path.join(stats_dir if stats_dir else ".", f"{stats_name}_{dataset_name}{stats_ext}")
+    
+    return config
+
+def detect_dataset_type(dataset_path):
+    """
+    根据数据集路径或名称判断数据集类型
+    
+    Args:
+        dataset_path: 数据集路径或名称
+        
+    Returns:
+        str: 数据集类型 ('vg' 或 'psg')
+    """
+    dataset_path_lower = dataset_path.lower()
+    
+    # 检查路径中是否包含关键词
+    if any(keyword in dataset_path_lower for keyword in ['psg', 'panoptic']):
+        return 'psg'
+    elif any(keyword in dataset_path_lower for keyword in ['vg', 'visual_genome', 'visual-genome']):
+        return 'vg'
+    
+    # 如果无法从路径判断，尝试加载数据集并检查特征
+    try:
+        dataset = load_dataset(dataset_path, split='train[:1]')  # 只加载一个样本进行检测
+        sample = dataset[0]
+        
+        # 检查样本中是否包含PSG特有的字段
+        if 'panoptic_segmentation' in sample or 'scene_graph' in sample:
+            return 'psg'
+        elif 'objects' in sample and 'relationships' in sample:
+            return 'vg'
+        
+        # 检查字段名称模式
+        if any('panoptic' in key.lower() for key in sample.keys()):
+            return 'psg'
+        elif any('relation' in key.lower() or 'object' in key.lower() for key in sample.keys()):
+            return 'vg'
+            
+    except Exception as e:
+        print(f"Warning: Could not automatically detect dataset type from path {dataset_path}: {e}")
+        print("Defaulting to 'vg' dataset type")
+    
+    # 默认返回vg类型
+    return 'vg'
+
 def load_local_dataset(dataset_path):
     """加载本地数据集"""
     try:
@@ -96,7 +201,7 @@ class VLInferencePipeline:
         torch.backends.cudnn.allow_tf32 = True
         
         if local_rank == 0:
-            print(f"Loading Qwen2.5-VL-7B-Instruct model...")
+            print(f"Loading Qwen2.5-VL-32B-Instruct model...")
         
         # 使用vLLM加载模型
         min_pixels = 4 * 28 * 28
@@ -457,36 +562,30 @@ def main():
     # 解析命令行参数
     parser = argparse.ArgumentParser(description="Visual Language Inference Pipeline")
     parser.add_argument('--local_rank', type=int, default=0, help='Local rank for distributed training')
-    parser.add_argument('--dataset_type', type=str, default='vg', choices=['vg', 'psg'],                 #数据集类别
-                       help='Dataset type: vg or psg')
-    parser.add_argument('--dataset_path', type=str, default='JosephZ/vg150_train_sgg_prompt',            #数据集路径
-                       help='Path to the dataset')
-    parser.add_argument('--output_file', type=str, default='/root/SGG-R3/relationship_augmentation.json',  #增强后数据集保存路径
-                       help='Output file path for final results')
-    parser.add_argument('--temp_output_file', type=str, default='temp_relationship_augmentation.json',
-                       help='Temporary output file path for intermediate results')
-    parser.add_argument('--stats_file', type=str, default='/root/R1-SGG/processing_statistics.json',
-                       help='Statistics file path')
-    parser.add_argument('--model_name', type=str, default='/root/R1-SGG/models/Qwen2.5-VL-7B-Instruct',     #使用模型路径
-                       help='Model name or path')
-    parser.add_argument('--max_new_tokens', type=int, default=1024,
-                       help='Maximum number of new tokens to generate')
-    parser.add_argument('--temperature', type=float, default=0.2,
-                       help='Temperature for sampling')
-    parser.add_argument('--top_p', type=float, default=0.9,
-                       help='Top-p for nucleus sampling')
-    parser.add_argument('--batch_size_per_gpu', type=int, default=16,
-                       help='Batch size per GPU')
-    parser.add_argument('--num_gpus', type=int, default=8,
-                       help='Number of GPUs to use')
-    parser.add_argument('--max_model_len', type=int, default=8192,
-                       help='Maximum model length')
-    parser.add_argument('--save_interval', type=int, default=100,
-                       help='Save interval for intermediate results')
+    parser.add_argument('--dataset_type', type=str, default='auto', choices=['vg', 'psg', 'auto'], 
+                       help='Dataset type: vg, psg, or auto (auto-detect from path)')
+    parser.add_argument('--dataset_path', type=str, default='JosephZ/vg150_train_sgg_prompt')
+    parser.add_argument('--output_file', type=str, default='relationship_augmentation.json')
+    parser.add_argument('--temp_output_file', type=str, default='temp_relationship_augmentation.json')
+    parser.add_argument('--stats_file', type=str, default='processing_statistics.json')
+    parser.add_argument('--model_name', type=str, default='Qwen/Qwen2.5-VL-32B-Instruct')
+    parser.add_argument('--max_new_tokens', type=int, default=1024)
+    parser.add_argument('--temperature', type=float, default=0.2)
+    parser.add_argument('--top_p', type=float, default=0.9)
+    parser.add_argument('--batch_size_per_gpu', type=int, default=16)
+    parser.add_argument('--max_model_len', type=int, default=8192)
+    parser.add_argument('--save_interval', type=int, default=100)
     
     args = parser.parse_args()
     
-    # 初始化配置
+    # 自动检测数据集类型（如果设置为auto）
+    if args.dataset_type == 'auto':
+        detected_type = detect_dataset_type(args.dataset_path)
+        if rank == 0:
+            print(f"Auto-detected dataset type: {detected_type} from path: {args.dataset_path}")
+        args.dataset_type = detected_type
+    
+    # 使用实际的world_size而不是固定值
     config = InferenceConfig(
         dataset_path=args.dataset_path,
         output_file=args.output_file,
@@ -497,21 +596,20 @@ def main():
         temperature=args.temperature,
         top_p=args.top_p,
         batch_size_per_gpu=args.batch_size_per_gpu,
-        num_gpus=args.num_gpus,
+        num_gpus=world_size,  # 关键修改：使用实际值
         max_model_len=args.max_model_len,
         save_interval=args.save_interval,
         dataset_type=args.dataset_type
     )
     
-    # 根据数据集类型调整输出文件路径
-    if config.dataset_type == "psg":
-        config.output_file = config.output_file.replace(".json", "_psg.json")
-        config.temp_output_file = config.temp_output_file.replace(".json", "_psg.json")
-        config.stats_file = config.stats_file.replace(".json", "_psg.json")
+    # 根据数据集名称调整输出文件路径（添加数据集名称后缀）
+    config = adjust_output_paths(config)
     
     if rank == 0:
         print(f"Using dataset type: {config.dataset_type}")
+        print(f"Dataset path: {config.dataset_path}")
         print(f"Output file: {config.output_file}")
+        print(f"Temp output file: {config.temp_output_file}")
         print(f"Statistics file: {config.stats_file}")
     
     try:
