@@ -164,7 +164,7 @@ def extract_answer_content(text: str) -> str:
             
             combined_content = f"""{{
     "objects": {object_json},
-    "relations": {relationship_json}
+    "relationships": {relationship_json}
 }}"""
             return combined_content
         except json.JSONDecodeError as e:
@@ -172,7 +172,7 @@ def extract_answer_content(text: str) -> str:
             print(f"JSON解析错误: {e}")
             combined_content = f"""{{
     "objects": {object_content},
-    "relations": {relationship_content}
+    "relationships": {relationship_content}
 }}"""
             return combined_content
         
@@ -188,9 +188,9 @@ def extract_answer_content(text: str) -> str:
             else:
                 object_list = []
             object_json = json.dumps(object_list)
-            return f'{{"objects": {object_json}, "relations": []}}'
+            return f'{{"objects": {object_json}, "relationships": []}}'
         except json.JSONDecodeError:
-            return f'{{"objects": {object_content}, "relations": []}}'
+            return f'{{"objects": {object_content}, "relationships": []}}'
     
     elif relationship_match:
         # 只有 RELATIO 标签
@@ -212,9 +212,9 @@ def extract_answer_content(text: str) -> str:
                 all_relationships = rel_data
             
             relationship_json = json.dumps(all_relationships)
-            return f'{{"objects": [], "relations": {relationship_json}}}'
+            return f'{{"objects": [], "relationships": {relationship_json}}}'
         except json.JSONDecodeError:
-            return f'{{"objects": [], "relations": {relationship_content}}}'
+            return f'{{"objects": [], "relationships": {relationship_content}}}'
     
     else:
         # 如果没有 OBJECT 和 RELATIONSHIP 标签，回退到原来的 <answer> 标签处理
@@ -365,7 +365,7 @@ def main():
     if not is_psg:
         db_raw = load_dataset("JosephZ/vg150_val_sgg_prompt")['train']
     else:
-        db_raw = load_dataset("/root/.cache/huggingface/hub/datasets--JosephZ--psg_test_sg")['train']
+        db_raw = load_dataset("JosephZ/psg_test_sg")['train']
     db = {str(e['image_id']): e for e in tqdm(db_raw, desc="Loading dataset")}
 
 
