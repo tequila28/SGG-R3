@@ -1,4 +1,4 @@
-# SGG-R3: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation
+# SGG-R³: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
