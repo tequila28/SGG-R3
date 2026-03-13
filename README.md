@@ -38,7 +38,7 @@
 
 SGG-R3 integrates supervised fine-tuning (SFT) and reinforcement learning (RL) with Group Sequence Policy Optimization (GSPO) in a three-stage structured reasoning framework:
 
-![framework](figures/famework.pdf)
+![framework](figures/framework.pdf)
 
 ```bash
 Input Image
