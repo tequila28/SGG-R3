@@ -53,4 +53,4 @@ Structured Scene Graph Output
 ```
 
 ## Visualization of SFT vs RL
-![framework](./figures/sft vs rl.pdf)
+![framework](./figures/sft%20vs%20rl.pdf)
