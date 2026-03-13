@@ -28,15 +28,17 @@
 
 | Method | Params | VG150 (Recall) | VG150 (mRecall) | PSG (Recall) | PSG (mRecall) |
 |--------|--------|---------------|---------------|------------|-------------|
-| SGG-R3† (SFT) | 2B | 32.04 | 31.15 | 56.52 | 53.78 |
-| SGG-R3† (SFT) | 3B | 34.12 | 33.24 | 56.50 | 53.46 |
-| SGG-R3‡ (SFT+RL) | 3B | 50.07 | 47.57 | 61.32 | 59.27 |
+| SGG-R3 (SFT) | 2B | 32.04 | 31.15 | 56.52 | 53.78 |
+| SGG-R3 (SFT) | 3B | 34.12 | 33.24 | 56.50 | 53.46 |
+| SGG-R3 (SFT+RL) | 3B | 50.07 | 47.57 | 61.32 | 59.27 |
 
 
 
 ## 🏗️ Framework Overview
 
 SGG-R3 integrates supervised fine-tuning (SFT) and reinforcement learning (RL) with Group Sequence Policy Optimization (GSPO) in a three-stage structured reasoning framework:
+
+![framework](./figures/famework.pdf)
 
 ```bash
 Input Image
@@ -49,3 +51,6 @@ Stage 3: Multi-type Relation Extraction
 ↓
 Structured Scene Graph Output
 ```
+
+## Visualization of SFT vs RL
+![framework](./figures/sft vs rl.pdf)
