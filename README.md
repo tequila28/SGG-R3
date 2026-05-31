@@ -1,4 +1,4 @@
-# SGG-R3: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation
+﻿# SGG-R3: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
@@ -9,9 +9,9 @@ Official implementation of **SGG-R3**, a structured reasoning framework for end-
 
 ## Highlights
 
-- **Structured scene graph reasoning**: decomposes SGG into object grounding and relation extraction with task-specific prompts.
+- **Structured scene graph reasoning**: decomposes SGG into category detection, object grounding and relation extraction with task-specific prompts.
 - **Relation augmentation**: generates additional relation supervision from pre-annotated objects to reduce sparse long-tail relation bias.
-- **SFT + RL training**: supports supervised fine-tuning and reinforcement learning with vLLM server acceleration.
+- **SFT + RL training**: supports supervised fine-tuning and reinforcement learning with verifiable rewards.
 - **VG150 and PSG support**: includes dataset-specific prompts, relation categories, post-processing, and evaluation utilities.
 
 ## Repository Structure
@@ -19,9 +19,9 @@ Official implementation of **SGG-R3**, a structured reasoning framework for end-
 ```text
 SGG-R3/
 ├── src/rl/configs/reward_config.yaml # Reward-function hyperparameters
-├── environment_SGG.yml               # Conda environment specification
+├── requirements.txt                  # Main Python training/inference dependencies
 ├── install.sh                        # Environment installation helper
-├── configs/                    # DeepSpeed/FSDP configs
+├── configs/                          # DeepSpeed/FSDP configs
 ├── scripts/
 │   ├── inference/
 │   │   ├── run_sgg_inference.sh      # Scene graph inference
@@ -39,7 +39,7 @@ SGG-R3/
 
 ## Environment Setup
 
-The recommended setup is a Linux machine with CUDA-capable GPUs. The provided environment file creates a conda environment named `SGG` with Python 3.10 and the main training/inference dependencies, including PyTorch, Transformers, TRL, vLLM, DeepSpeed, flash-attn, qwen-vl-utils, and evaluation packages.
+The recommended setup is a Linux machine with CUDA-capable GPUs. Create a conda environment named `SGG` with Python 3.10, install the main training/inference dependencies from `requirements.txt`, then install `flash-attn` separately with build isolation disabled.
 
 ### Install With Script
 
@@ -51,15 +51,23 @@ conda activate SGG
 ### Install Manually
 
 ```bash
-conda env create -f environment_SGG.yml
+conda create -n SGG python=3.10 -y
 conda activate SGG
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
+python -m pip install "flash-attn==2.8.1" --no-build-isolation
 ```
 
-If the environment already exists, update it with:
+If the environment already exists, update dependencies with:
 
 ```bash
-conda env update -n SGG -f environment_SGG.yml --prune
+conda activate SGG
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
+python -m pip install "flash-attn==2.8.1" --no-build-isolation
 ```
+
+`flash-attn` is intentionally not included in `requirements.txt` because it needs the already installed PyTorch/CUDA environment during build.
 
 For Hugging Face access, log in when needed:
 
@@ -287,7 +295,6 @@ If you find this project useful, please cite the paper:
   url           = {https://arxiv.org/abs/2603.07961}
 }
 ```
-
 
 
 
