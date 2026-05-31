@@ -1,17 +1,265 @@
-# SGG-R³: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation
+# SGG-R3: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange)](https://pytorch.org/)
+[![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.7.1-orange)](https://pytorch.org/)
 [![Paper](https://img.shields.io/badge/Paper-ArXiv-red)](https://arxiv.org/abs/2603.07961)
 
-> **Official implementation of SGG-R3**, a structured reasoning framework for end-to-end unbiased scene graph generation. This work addresses the challenges of sparse, long-tailed relation distributions in Scene Graph Generation (SGG) by integrating task-specific chain-of-thought reasoning with reinforcement learning.
+Official implementation of **SGG-R3**, a structured reasoning framework for end-to-end unbiased Scene Graph Generation (SGG). The project combines task-specific chain-of-thought prompting, relation augmentation, supervised fine-tuning, and reinforcement learning for VG150 and PSG scene graph generation.
 
-## 🔥 Highlights
+## Highlights
 
-- **Structured Three-Stage Reasoning**: Decomposes scene graph generation into sequential category detection, instance grounding, and multi-type relation extraction stages
-- **Relation Augmentation**: Mitigates relation sparsity by generating high-quality augmented data using MLLM
-- **Dual-granularity Reward**: Combines fine-grained and coarse-grained relation rewards to address long-tail distribution
-- **Leading Performance**: Achieves superior results on VG150 and PSG benchmarks compared to existing methods
+- **Structured scene graph reasoning**: decomposes SGG into object grounding and relation extraction with task-specific prompts.
+- **Relation augmentation**: generates additional relation supervision from pre-annotated objects to reduce sparse long-tail relation bias.
+- **SFT + RL training**: supports supervised fine-tuning and reinforcement learning with vLLM server acceleration.
+- **VG150 and PSG support**: includes dataset-specific prompts, relation categories, post-processing, and evaluation utilities.
 
+## Repository Structure
+
+```text
+SGG-R3/
+├── configs/reward_config.yaml        # Reward-function hyperparameters
+├── environment_SGG.yml               # Conda environment specification
+├── install.sh                        # Environment installation helper
+├── configs/                    # DeepSpeed/FSDP configs
+├── scripts/
+│   ├── inference/
+│   │   ├── run_sgg_inference.sh      # Scene graph inference
+│   │   └── run_sgg_augmentation.sh   # Relationship augmentation inference
+│   ├── rl/run_sgg_rl.sh              # RL training entry
+│   └── sft/run_sgg_sft.sh            # SFT training entry
+└── src/
+    ├── data_augmentation/            # Relation augmentation pipeline
+    ├── evaluation/                   # Prediction gathering and SGG evaluation
+    ├── inference/                    # vLLM inference pipeline
+    ├── prompt/                       # Dataset prompts and category definitions
+    ├── rl/                           # RL training and rewards
+    └── sft/                          # SFT training and data construction
+```
+
+## Environment Setup
+
+The recommended setup is a Linux machine with CUDA-capable GPUs. The provided environment file creates a conda environment named `SGG` with Python 3.10 and the main training/inference dependencies, including PyTorch, Transformers, TRL, vLLM, DeepSpeed, flash-attn, qwen-vl-utils, and evaluation packages.
+
+### Install With Script
+
+```bash
+bash install.sh
+conda activate SGG
+```
+
+### Install Manually
+
+```bash
+conda env create -f environment_SGG.yml
+conda activate SGG
+```
+
+If the environment already exists, update it with:
+
+```bash
+conda env update -n SGG -f environment_SGG.yml --prune
+```
+
+For Hugging Face access, log in when needed:
+
+```bash
+huggingface-cli login
+```
+
+The shell scripts use the Hugging Face mirror by default:
+
+```bash
+export HF_ENDPOINT=https://hf-mirror.com
+```
+
+Remove or change this variable if you do not need the mirror.
+
+## Data Preparation
+
+The code expects Hugging Face-format scene graph datasets with at least these fields:
+
+- `image_id`
+- `image`
+- `objects`: JSON string of object annotations
+- `relationships`: JSON string of relation annotations
+
+Common dataset names used by the scripts include:
+
+```text
+JosephZ/vg150_train_sgg_prompt
+JosephZ/vg150_val_sgg_prompt
+JosephZ/psg_train_sg
+```
+
+You can use Hugging Face dataset IDs directly or cached local dataset paths.
+
+Before running experiments, edit the dataset and model variables at the top of each shell script.
+
+## Training
+
+The training pipeline contains three stages:
+
+1. Optional relationship augmentation
+2. Supervised fine-tuning (SFT)
+3. Reinforcement learning (RL)
+
+### 1. Relationship Augmentation
+
+Generate augmented relation labels from a fine-tuned or instruction-tuned vision-language model:
+
+```bash
+bash scripts/inference/run_sgg_augmentation.sh
+```
+
+Important variables in `scripts/inference/run_sgg_augmentation.sh`:
+
+```bash
+DATASET_TYPE="auto"
+DATASET_PATH="/root/.cache/huggingface/datasets/JosephZ___vg150_train_sgg_prompt"
+MODEL_NAME="models/qwen2-vl-2b-sft-vg/checkpoint-200"
+OUTPUT_FILE="./augmentation_results/relationship_augmentation.json"
+BATCH_SIZE=16
+TENSOR_PARALLEL_SIZE=4
+MAX_MODEL_LEN=8192
+MAX_NEW_TOKENS=1024
+TEMPERATURE=0.2
+TOP_K=50
+TOP_P=0.9
+```
+
+### 2. Supervised Fine-Tuning
+
+Run SFT with FSDP:
+
+```bash
+bash scripts/sft/run_sgg_sft.sh
+```
+
+Key variables in `scripts/sft/run_sgg_sft.sh`:
+
+```bash
+MODEL_NAME_OR_PATH="Qwen/Qwen2.5-VL-3B-Instruct"
+DATASET_NAME="JosephZ/psg_train_sg"
+AUGMENTED_DATA_PATH=""
+OUTPUT_DIR="models/qwen2.5-vl-3b-sft-psg"
+GPUS_PER_NODE=8
+PER_DEVICE_TRAIN_BATCH_SIZE=16
+MAX_LENGTH=8192
+```
+
+Set `AUGMENTED_DATA_PATH` to the JSON generated by the augmentation step if you want to train with augmented relations.
+
+### 3. Reinforcement Learning
+
+Run RL training with a vLLM server and TRL:
+
+```bash
+bash scripts/rl/run_sgg_rl.sh
+```
+
+Key variables in `scripts/rl/run_sgg_rl.sh`:
+
+```bash
+VLLM_CUDA_DEVICES="6,7"
+TRAIN_CUDA_DEVICES="0,1,2,3,4,5"
+MODEL_PATH="models/qwen2.5-vl-3b-sft-psg"
+DATA_PATH="JosephZ/vg150_train_sgg_prompt"
+OUTPUT_DIR="models/qwen2.5vl-3b-gspo-g8-psg"
+REWARD_CONFIG_PATH="configs/reward_config.yaml"
+TOP_P=0.9
+TOP_K=50
+TEMPERATURE=1
+NUM_GENERATIONS=8
+```
+
+Reward-function parameters are defined in `configs/reward_config.yaml`, including debug behavior, matching weights, coarse-reward clustering parameters, relation-frequency weighting, and format-reward scores.
+
+## Inference and Testing
+
+Run scene graph inference after SFT or RL training:
+
+```bash
+bash scripts/inference/run_sgg_inference.sh
+```
+
+Key variables in `scripts/inference/run_sgg_inference.sh`:
+
+```bash
+DATASET="/root/.cache/huggingface/datasets/JosephZ___vg150_train_sgg_prompt"
+MODEL_NAME="models/qwen2-vl-2b-sft-vg/checkpoint-200"
+OUTPUT_DIR="./output_results"
+BATCH_SIZE=16
+TENSOR_PARALLEL_SIZE=4
+MAX_MODEL_LEN=4096
+MAX_NEW_TOKENS=2048
+TEMPERATURE=0.1
+TOP_K=50
+TOP_P=0.95
+REPETITION_PENALTY=1.05
+```
+
+The inference script saves one JSON file per image under `OUTPUT_DIR`. Each file contains `image_id`, raw model response, ground-truth objects and relationships, and the `box_scale` used by post-processing.
+
+## Evaluation
+
+The evaluation pipeline has two steps:
+
+1. Gather raw per-image JSON predictions into the evaluator format.
+2. Run VG150/PSG scene graph evaluation.
+
+Example for VG150:
+
+```bash
+python src/evaluation/sgg_gather_preds_cot.py \
+    vg \
+    ./output_results \
+    ./output_results/vg150_predictions.json
+
+python src/evaluation/vg150_eval.py \
+    JosephZ/vg150_val_sgg_prompt \
+    ./output_results/vg150_predictions.json
+```
+
+Example for PSG:
+
+```bash
+python src/evaluation/sgg_gather_preds_cot.py \
+    psg \
+    ./output_results \
+    ./output_results/psg_predictions.json
+
+python src/evaluation/vg150_eval.py \
+    JosephZ/psg_test_sg \
+    ./output_results/psg_predictions.json
+```
+
+The evaluator reports standard scene graph recall metrics and frequency-group statistics for long-tail relation analysis.
+
+## Notes
+
+- Qwen2-VL uses normalized box scale `[0, 1000]`; Qwen2.5-VL uses image-size box scaling in the inference post-processing path.
+- Shell scripts define important hyperparameters near the top before passing them into Python entries.
+- vLLM tensor parallel size should match the number of visible GPUs assigned to the vLLM process.
+- Large-scale SFT/RL runs require substantial GPU memory; tune `BATCH_SIZE`, `TENSOR_PARALLEL_SIZE`, `MAX_MODEL_LEN`, and DeepSpeed/FSDP configs for your hardware.
+
+## Acknowledgement
+
+We thank [gpt4vision/R1-SGG](https://github.com/gpt4vision/R1-SGG) for releasing the open-source code and Hugging Face-format scene graph datasets. This project is developed based on that work.
+
+## Citation
+
+If you find this project useful, please cite the paper:
+
+```bibtex
+@misc{feng2026sggr3,
+  title         = {{SGG-R}$^{\rm 3}$: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation},
+  author        = {Feng, Jiaye and Yin, Qixiang and Liu, Yuankun and Mo, Tong and Li, Weiping},
+  year          = {2026},
+  eprint        = {2603.07961},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  url           = {https://arxiv.org/abs/2603.07961}
+}
+```
 
