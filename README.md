@@ -147,13 +147,13 @@ Important variables in `scripts/inference/run_sgg_augmentation.sh`:
 
 ```bash
 DATASET_TYPE="auto"
-DATASET_PATH="/root/.cache/huggingface/datasets/JosephZ___vg150_train_sgg_prompt"
-MODEL_NAME="models/qwen2-vl-2b-sft-vg/checkpoint-200"
-OUTPUT_FILE="./augmentation_results/relationship_augmentation.json"
+DATASET_PATH="JosephZ/vg150_test_sg"
+MODEL_NAME="Qwen/Qwen2.5-VL-32B-Instruct"
+OUTPUT_FILE="./augmentation_results/vg_augmentation_data.json"
 BATCH_SIZE=16
 TENSOR_PARALLEL_SIZE=4
-MAX_MODEL_LEN=8192
-MAX_NEW_TOKENS=1024
+MAX_MODEL_LEN=4096
+MAX_NEW_TOKENS=2048
 TEMPERATURE=0.2
 TOP_K=50
 TOP_P=0.9
@@ -175,7 +175,7 @@ DATASET_NAME="JosephZ/psg_train_sg"
 USE_AUGMENTED_DATA=true
 PSG_AUGMENTED_DATA_PATH="tequila3009/psg_augmentation_data"
 VG_AUGMENTED_DATA_PATH="tequila3009/vg_augmentation_data"
-OUTPUT_DIR="models/qwen2.5-vl-3b-sft-psg"
+OUTPUT_DIR="./models/qwen2.5-vl-3b-sft-psg"
 GPUS_PER_NODE=8
 PER_DEVICE_TRAIN_BATCH_SIZE=16
 MAX_LENGTH=8192
@@ -196,9 +196,9 @@ Key variables in `scripts/rl/run_sgg_rl.sh`:
 ```bash
 VLLM_CUDA_DEVICES="6,7"
 TRAIN_CUDA_DEVICES="0,1,2,3,4,5"
-MODEL_PATH="models/qwen2.5-vl-3b-sft-psg"
+MODEL_PATH="./models/qwen2.5-vl-3b-sft-psg"
 DATA_PATH="JosephZ/vg150_train_sgg_prompt"
-OUTPUT_DIR="models/qwen2.5vl-3b-gspo-g8-psg"
+OUTPUT_DIR="./models/qwen2.5vl-3b-gspo-psg"
 REWARD_CONFIG_PATH="src/rl/configs/reward_config.yaml"
 TOP_P=0.9
 TOP_K=50
@@ -219,16 +219,16 @@ bash scripts/inference/run_sgg_inference.sh
 Key variables in `scripts/inference/run_sgg_inference.sh`:
 
 ```bash
-DATASET="/root/.cache/huggingface/datasets/JosephZ___vg150_train_sgg_prompt"
-MODEL_NAME="models/qwen2-vl-2b-sft-vg/checkpoint-200"
+DATASET="JosephZ/vg150_test_sg"
+MODEL_NAME="./models/qwen2.5-vl-3b-sft-psg"
 OUTPUT_DIR="./output_results"
 BATCH_SIZE=16
 TENSOR_PARALLEL_SIZE=4
 MAX_MODEL_LEN=4096
 MAX_NEW_TOKENS=2048
-TEMPERATURE=0.1
+TEMPERATURE=0.2
 TOP_K=50
-TOP_P=0.95
+TOP_P=0.9
 REPETITION_PENALTY=1.05
 ```
 
@@ -278,7 +278,7 @@ The evaluator reports standard scene graph recall metrics and frequency-group st
 
 ## Acknowledgement
 
-We thank [gpt4vision/R1-SGG](https://github.com/gpt4vision/R1-SGG) for releasing the open-source code and Hugging Face-format scene graph datasets. This project is developed based on that work.
+We thank [gpt4vision/R1-SGG](https://github.com/gpt4vision/R1-SGG) for releasing the open-source code and Hugging Face-format scene graph datasets, which formed the foundation of our implementation.
 
 ## Citation
 
