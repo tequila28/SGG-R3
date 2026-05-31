@@ -1,9 +1,6 @@
 ﻿# SGG-R3: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.7.1-orange)](https://pytorch.org/)
-[![Paper](https://img.shields.io/badge/Paper-ArXiv-red)](https://arxiv.org/abs/2603.07961)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![Python](https://img.shields.io/badge/Python-3.10-blue.svg)]() [![PyTorch](https://img.shields.io/badge/PyTorch-2.7.1-orange.svg)]() [![Paper](https://img.shields.io/badge/Paper-ArXiv-red.svg)](https://arxiv.org/abs/2603.07961) [![trl](https://img.shields.io/badge/trl-0.22.0-green.svg)](https://github.com/huggingface/trl) [![vLLM](https://img.shields.io/badge/vLLM-0.10.1-8A2BE2.svg)](https://github.com/vllm-project/vllm)
 
 Official implementation of **SGG-R3**, a structured reasoning framework for end-to-end unbiased Scene Graph Generation (SGG). The project combines task-specific chain-of-thought prompting, relation augmentation, supervised fine-tuning, and reinforcement learning for VG150 and PSG scene graph generation.
 
