@@ -1,6 +1,9 @@
 ﻿# SGG-R3: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![Python](https://img.shields.io/badge/Python-3.10-blue.svg)]() [![PyTorch](https://img.shields.io/badge/PyTorch-2.7.1-orange.svg)]() [![Paper](https://img.shields.io/badge/Paper-ArXiv-red.svg)](https://arxiv.org/abs/2603.07961) [![trl](https://img.shields.io/badge/trl-0.22.0-green.svg)](https://github.com/huggingface/trl) [![vLLM](https://img.shields.io/badge/vLLM-0.10.1-8A2BE2.svg)](https://github.com/vllm-project/vllm)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.10.0-orange)](https://pytorch.org/)
+[![Paper](https://img.shields.io/badge/Paper-ArXiv-red)](https://arxiv.org/abs/2603.07961)
 
 Official implementation of **SGG-R3**, a structured reasoning framework for end-to-end unbiased Scene Graph Generation (SGG). The project combines task-specific chain-of-thought prompting, relation augmentation, supervised fine-tuning, and reinforcement learning for VG150 and PSG scene graph generation.
 
@@ -18,7 +21,7 @@ SGG-R3/
 ├── src/rl/configs/reward_config.yaml # Reward-function hyperparameters
 ├── requirements.txt                  # Main Python training/inference dependencies
 ├── install.sh                        # Environment installation helper
-├── configs/                          # DeepSpeed/FSDP configs
+├── local_scripts/                    # DeepSpeed/FSDP configs
 ├── scripts/
 │   ├── inference/
 │   │   ├── run_sgg_inference.sh      # Scene graph inference
@@ -36,7 +39,7 @@ SGG-R3/
 
 ## Environment Setup
 
-The recommended setup is a Linux machine with CUDA-capable GPUs. Create a conda environment named `SGG` with Python 3.10, install the main training/inference dependencies from `requirements.txt`, then install `flash-attn` separately with build isolation disabled.
+This version targets **TRL 1.7.1 + vLLM 0.17.1**, with PyTorch 2.10.0, Transformers 4.57.6 and datasets 4.7.0. Use a fresh Linux NVIDIA GPU environment with Python 3.10. Training defaults to PyTorch SDPA; `flash-attn` is optional. See [the migration and parameter guide](docs/version_migration.md).
 
 ### Install With Script
 
@@ -50,21 +53,21 @@ conda activate SGG
 ```bash
 conda create -n SGG python=3.10 -y
 conda activate SGG
-python -m pip install --upgrade pip setuptools wheel
+python -m pip install --upgrade pip 'setuptools>=77.0.3,<81' wheel
 python -m pip install -r requirements.txt
-python -m pip install "flash-attn==2.8.1" --no-build-isolation
+python -m pip check
 ```
 
 If the environment already exists, update dependencies with:
 
 ```bash
 conda activate SGG
-python -m pip install --upgrade pip setuptools wheel
+python -m pip install --upgrade pip 'setuptools>=77.0.3,<81' wheel
 python -m pip install -r requirements.txt
-python -m pip install "flash-attn==2.8.1" --no-build-isolation
+python -m pip check
 ```
 
-`flash-attn` is intentionally not included in `requirements.txt` because it needs the already installed PyTorch/CUDA environment during build.
+Prefer a fresh environment over upgrading the old Torch/xformers environment in place. For optional Flash Attention, run `INSTALL_FLASH_ATTN=true bash install.sh`, then set `ATTN_IMPLEMENTATION=flash_attention_2` when launching training. Building it requires a CUDA toolkit compatible with the installed PyTorch.
 
 For Hugging Face access, log in when needed:
 
@@ -120,7 +123,7 @@ tequila3009/psg_augmentation_data
 tequila3009/vg_augmentation_data
 ```
 
-You can use Hugging Face dataset IDs directly or cached local dataset paths.
+Use Hugging Face dataset IDs or directories produced by `Dataset.save_to_disk` / `DatasetDict.save_to_disk`. Internal Hugging Face cache directories are not portable dataset paths. The split defaults to `train`; held-out repositories may also name their only split `train`.
 
 Before running experiments, edit the dataset and model variables at the top of each shell script.
 
@@ -144,13 +147,13 @@ Important variables in `scripts/inference/run_sgg_augmentation.sh`:
 
 ```bash
 DATASET_TYPE="auto"
-DATASET_PATH="JosephZ/vg150_test_sg"
-MODEL_NAME="Qwen/Qwen2.5-VL-32B-Instruct"
-OUTPUT_FILE="./augmentation_results/vg_augmentation_data.json"
+DATASET_PATH="JosephZ/vg150_train_sgg_prompt"
+MODEL_NAME="models/qwen2-vl-2b-sft-vg/checkpoint-200"
+OUTPUT_FILE="./augmentation_results/relationship_augmentation.json"
 BATCH_SIZE=16
 TENSOR_PARALLEL_SIZE=4
-MAX_MODEL_LEN=4096
-MAX_NEW_TOKENS=2048
+MAX_MODEL_LEN=8192
+MAX_NEW_TOKENS=1024
 TEMPERATURE=0.2
 TOP_K=50
 TOP_P=0.9
@@ -172,10 +175,10 @@ DATASET_NAME="JosephZ/psg_train_sg"
 USE_AUGMENTED_DATA=true
 PSG_AUGMENTED_DATA_PATH="tequila3009/psg_augmentation_data"
 VG_AUGMENTED_DATA_PATH="tequila3009/vg_augmentation_data"
-OUTPUT_DIR="./models/qwen2.5-vl-3b-sft-psg"
+OUTPUT_DIR="models/qwen2.5-vl-3b-sft-psg"
 GPUS_PER_NODE=8
 PER_DEVICE_TRAIN_BATCH_SIZE=16
-MAX_LENGTH=8192
+MAX_LENGTH=0  # No truncation, preserving the previous effective behavior.
 ```
 
 `USE_AUGMENTED_DATA` controls whether SFT uses augmented relations. When it is `true`, `AUGMENTED_DATA_PATH` is selected automatically from `DATASET_NAME` in the SFT script. When it is `false`, SFT uses the original `relationships` field from `DATASET_NAME`. PSG uses [tequila3009/psg_augmentation_data](https://huggingface.co/datasets/tequila3009/psg_augmentation_data), and VG uses [tequila3009/vg_augmentation_data](https://huggingface.co/datasets/tequila3009/vg_augmentation_data). The value can also be a local JSON file, a Hugging Face dataset ID, or a Hugging Face dataset URL.
@@ -193,9 +196,9 @@ Key variables in `scripts/rl/run_sgg_rl.sh`:
 ```bash
 VLLM_CUDA_DEVICES="6,7"
 TRAIN_CUDA_DEVICES="0,1,2,3,4,5"
-MODEL_PATH="./models/qwen2.5-vl-3b-sft-psg"
-DATA_PATH="JosephZ/vg150_train_sgg_prompt"
-OUTPUT_DIR="./models/qwen2.5vl-3b-gspo-psg"
+MODEL_PATH="models/qwen2.5-vl-3b-sft-psg"
+DATA_PATH="JosephZ/psg_train_sg"
+OUTPUT_DIR="models/qwen2.5vl-3b-gspo-g8-psg"
 REWARD_CONFIG_PATH="src/rl/configs/reward_config.yaml"
 TOP_P=0.9
 TOP_K=50
@@ -203,29 +206,30 @@ TEMPERATURE=1
 NUM_GENERATIONS=8
 ```
 
-Reward-function parameters are defined in `src/rl/configs/reward_config.yaml`, including debug behavior, matching weights, coarse-reward clustering parameters, and relation-frequency weighting.
+Reward-function parameters are defined in `src/rl/configs/reward_config.yaml`. Its dataset type must match `DATASET_TYPE` and the training data. The launcher uses `python -m src.rl.vllm_server`, an adapter around the TRL server that passes the same image pixel limits as the trainer. Training starts after a health check, and cleanup terminates only this launcher's server process group.
 
 ## Inference and Testing
 
 Run scene graph inference after SFT or RL training:
 
 ```bash
-bash scripts/inference/run_sgg_inference.sh
+MODEL_NAME="models/qwen2.5-vl-3b-sft-psg" \
+DATASET="JosephZ/psg_test_sg" bash scripts/inference/run_sgg_inference.sh
 ```
 
 Key variables in `scripts/inference/run_sgg_inference.sh`:
 
 ```bash
-DATASET="JosephZ/vg150_test_sg"
-MODEL_NAME="./models/qwen2.5-vl-3b-sft-psg"
+DATASET="JosephZ/vg150_val_sgg_prompt"
+MODEL_NAME="models/qwen2-vl-2b-sft-vg/checkpoint-200"
 OUTPUT_DIR="./output_results"
 BATCH_SIZE=16
 TENSOR_PARALLEL_SIZE=4
 MAX_MODEL_LEN=4096
 MAX_NEW_TOKENS=2048
-TEMPERATURE=0.2
+TEMPERATURE=0.1
 TOP_K=50
-TOP_P=0.9
+TOP_P=0.95
 REPETITION_PENALTY=1.05
 ```
 
@@ -275,7 +279,7 @@ The evaluator reports standard scene graph recall metrics and frequency-group st
 
 ## Acknowledgement
 
-We thank [gpt4vision/R1-SGG](https://github.com/gpt4vision/R1-SGG) for releasing the open-source code and Hugging Face-format scene graph datasets, which formed the foundation of our implementation.
+We thank [gpt4vision/R1-SGG](https://github.com/gpt4vision/R1-SGG) for releasing the open-source code and Hugging Face-format scene graph datasets. This project is developed based on that work.
 
 ## Citation
 
