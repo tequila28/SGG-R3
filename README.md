@@ -1,54 +1,56 @@
-﻿# SGG-R3: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation
+# SGG-R3: From Next-Token Prediction to End-to-End Unbiased Scene Graph Generation
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[中文文档](README_zh-CN.md) | English
+
 [![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.10.0-orange)](https://pytorch.org/)
-[![Paper](https://img.shields.io/badge/Paper-ArXiv-red)](https://arxiv.org/abs/2603.07961)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.10.0-ee4c2c)](https://pytorch.org/)
+[![TRL](https://img.shields.io/badge/TRL-1.7.1-ffd21e)](https://github.com/huggingface/trl)
+[![vLLM](https://img.shields.io/badge/vLLM-0.17.1-4b8bbe)](https://github.com/vllm-project/vllm)
+[![Paper](https://img.shields.io/badge/Paper-arXiv%3A2603.07961-b31b1b)](https://arxiv.org/abs/2603.07961)
 
-Official implementation of **SGG-R3**, a structured reasoning framework for end-to-end unbiased Scene Graph Generation (SGG). The project combines task-specific chain-of-thought prompting, relation augmentation, supervised fine-tuning, and reinforcement learning for VG150 and PSG scene graph generation.
+Official implementation of **SGG-R3**, a structured-reasoning framework for end-to-end unbiased Scene Graph Generation (SGG). It decomposes generation into category detection, object grounding, and relation extraction, then combines relation augmentation, supervised fine-tuning, and reward-driven reinforcement learning for VG150 and PSG.
 
-## Highlights
+## Overview
 
-- **Structured scene graph reasoning**: decomposes SGG into category detection, object grounding and relation extraction with task-specific prompts.
-- **Relation augmentation**: generates additional relation supervision from pre-annotated objects to reduce sparse long-tail relation bias.
-- **SFT + RL training**: supports supervised fine-tuning and reinforcement learning with verifiable rewards.
-- **VG150 and PSG support**: includes dataset-specific prompts, relation categories, post-processing, and evaluation utilities.
+```text
+scene graph data -> relation augmentation (optional) -> SFT -> RL -> inference -> evaluation
+```
 
-## Repository Structure
+- **Structured reasoning prompts** guide category, object, and relation prediction.
+- **Relation augmentation** expands relation supervision from annotated objects.
+- **SFT + RL** combine supervised learning with staged, verifiable rewards.
+- **VG150 and PSG** are supported through dataset-specific prompts, relation groups, post-processing, and evaluation utilities.
+
+## Repository Layout
 
 ```text
 SGG-R3/
-├── src/rl/configs/reward_config.yaml # Reward-function hyperparameters
-├── requirements.txt                  # Main Python training/inference dependencies
-├── install.sh                        # Environment installation helper
-├── local_scripts/                    # DeepSpeed/FSDP configs
-├── scripts/
-│   ├── inference/
-│   │   ├── run_sgg_inference.sh      # Scene graph inference
-│   │   └── run_sgg_augmentation.sh   # Relationship augmentation inference
-│   ├── rl/run_sgg_rl.sh              # RL training entry
-│   └── sft/run_sgg_sft.sh            # SFT training entry
-└── src/
-    ├── data_augmentation/            # Relation augmentation pipeline
-    ├── evaluation/                   # Prediction gathering and SGG evaluation
-    ├── inference/                    # vLLM inference pipeline
-    ├── prompt/                       # Dataset prompts and category definitions
-    ├── rl/                           # RL training and rewards
-    └── sft/                          # SFT training and data construction
+├── docs/                         # Version migration and runtime notes
+├── local_scripts/                # DeepSpeed and FSDP configurations
+├── scripts/                      # Launchers for augmentation, SFT, RL, and inference
+├── src/
+│   ├── common/                   # Shared dataset, model, and inference helpers
+│   ├── data_augmentation/        # Relation augmentation pipeline
+│   ├── evaluation/               # Prediction gathering and SGG metrics
+│   ├── inference/                # vLLM inference entry point
+│   ├── prompt/                   # Prompts and category definitions
+│   ├── rl/                       # GRPO training, rewards, and configuration
+│   └── sft/                      # Supervised fine-tuning and data construction
+├── tests/                        # CPU-only reward configuration checks
+├── install.sh                    # Environment setup helper
+└── requirements.txt              # Pinned runtime dependencies
 ```
 
-## Environment Setup
+## Setup
 
-This version targets **TRL 1.7.1 + vLLM 0.17.1**, with PyTorch 2.10.0, Transformers 4.57.6 and datasets 4.7.0. Use a fresh Linux NVIDIA GPU environment with Python 3.10. Training defaults to PyTorch SDPA; `flash-attn` is optional. See [the migration and parameter guide](docs/version_migration.md).
-
-### Install With Script
+The runtime targets Linux with NVIDIA GPUs, Python 3.10, **TRL 1.7.1**, **vLLM 0.17.1**, PyTorch 2.10.0, and Transformers 4.57.6. See [the version migration guide](docs/version_migration.md) for compatibility notes.
 
 ```bash
 bash install.sh
 conda activate SGG
 ```
 
-### Install Manually
+Manual setup:
 
 ```bash
 conda create -n SGG python=3.10 -y
@@ -58,234 +60,133 @@ python -m pip install -r requirements.txt
 python -m pip check
 ```
 
-If the environment already exists, update dependencies with:
+Flash Attention is optional: install it with `INSTALL_FLASH_ATTN=true bash install.sh`, then set `ATTN_IMPLEMENTATION=flash_attention_2` in a launcher. Scripts default to `https://hf-mirror.com`; override `HF_ENDPOINT` as needed.
 
-```bash
-conda activate SGG
-python -m pip install --upgrade pip 'setuptools>=77.0.3,<81' wheel
-python -m pip install -r requirements.txt
-python -m pip check
-```
+## Data
 
-Prefer a fresh environment over upgrading the old Torch/xformers environment in place. For optional Flash Attention, run `INSTALL_FLASH_ATTN=true bash install.sh`, then set `ATTN_IMPLEMENTATION=flash_attention_2` when launching training. Building it requires a CUDA toolkit compatible with the installed PyTorch.
-
-For Hugging Face access, log in when needed:
-
-```bash
-huggingface-cli login
-```
-
-The shell scripts use the Hugging Face mirror by default:
-
-```bash
-export HF_ENDPOINT=https://hf-mirror.com
-```
-
-Remove or change this variable if you do not need the mirror.
-
-## Data Preparation
-
-The code expects Hugging Face-format scene graph datasets with at least these fields:
-
-- `image_id`
-- `image`
-- `objects`: JSON string of object annotations
-- `relationships`: JSON string of relation annotations
-
-Training uses the train split datasets, such as `JosephZ/psg_train_sg` or `JosephZ/vg150_train_sgg_prompt`. Inference and evaluation should use the corresponding held-out/test datasets, such as `JosephZ/vg150_val_sgg_prompt` for VG150 and the PSG test dataset used in the evaluation script.
-
-Augmented relation data is optional for SFT. The uploaded augmentation datasets are converted from the local JSON augmentation results and stored in Hugging Face dataset format:
-
-- PSG augmentation: [tequila3009/psg_augmentation_data](https://huggingface.co/datasets/tequila3009/psg_augmentation_data)
-- VG augmentation: [tequila3009/vg_augmentation_data](https://huggingface.co/datasets/tequila3009/vg_augmentation_data)
-
-Common dataset names used by the scripts include:
-
-Training datasets:
+Each dataset must include `image_id`, `image`, `objects`, and `relationships`. The latter two may be JSON strings or lists. Common dataset IDs are:
 
 ```text
+# Training
 JosephZ/vg150_train_sgg_prompt
 JosephZ/psg_train_sg
-```
 
-Test / evaluation datasets:
-
-```text
+# Evaluation
 JosephZ/vg150_val_sgg_prompt
 JosephZ/vg150_test_sg
 JosephZ/psg_test_sg
-```
 
-Augmentation datasets:
-
-```text
-tequila3009/psg_augmentation_data
+# Optional augmented relations for SFT
 tequila3009/vg_augmentation_data
+tequila3009/psg_augmentation_data
 ```
 
-Use Hugging Face dataset IDs or directories produced by `Dataset.save_to_disk` / `DatasetDict.save_to_disk`. Internal Hugging Face cache directories are not portable dataset paths. The split defaults to `train`; held-out repositories may also name their only split `train`.
-
-Before running experiments, edit the dataset and model variables at the top of each shell script.
+Local datasets can be supplied as normal `load_dataset` sources or directories created with `Dataset.save_to_disk` / `DatasetDict.save_to_disk`. Do not use an internal Hugging Face cache directory as a dataset path.
 
 ## Training
 
-The training pipeline contains three stages:
+Set the dataset, model, GPU, and output variables near the top of each launcher before running an experiment.
 
-1. Optional relationship augmentation
-2. Supervised fine-tuning (SFT)
-3. Reinforcement learning (RL)
-
-### 1. Relationship Augmentation
-
-Generate augmented relation labels from a fine-tuned or instruction-tuned vision-language model:
+### 1. Relation Augmentation (optional)
 
 ```bash
 bash scripts/inference/run_sgg_augmentation.sh
 ```
 
-Important variables in `scripts/inference/run_sgg_augmentation.sh`:
-
-```bash
-DATASET_TYPE="auto"
-DATASET_PATH="JosephZ/vg150_train_sgg_prompt"
-MODEL_NAME="models/qwen2-vl-2b-sft-vg/checkpoint-200"
-OUTPUT_FILE="./augmentation_results/relationship_augmentation.json"
-BATCH_SIZE=16
-TENSOR_PARALLEL_SIZE=4
-MAX_MODEL_LEN=8192
-MAX_NEW_TOKENS=1024
-TEMPERATURE=0.2
-TOP_K=50
-TOP_P=0.9
-```
+The launcher controls `DATASET_TYPE`, `DATASET_PATH`, `MODEL_NAME`, `OUTPUT_FILE`, sampling settings, context length, batch size, and tensor parallelism.
 
 ### 2. Supervised Fine-Tuning
-
-Run SFT with FSDP:
 
 ```bash
 bash scripts/sft/run_sgg_sft.sh
 ```
 
-Key variables in `scripts/sft/run_sgg_sft.sh`:
-
-```bash
-MODEL_NAME_OR_PATH="Qwen/Qwen2.5-VL-3B-Instruct"
-DATASET_NAME="JosephZ/psg_train_sg"
-USE_AUGMENTED_DATA=true
-PSG_AUGMENTED_DATA_PATH="tequila3009/psg_augmentation_data"
-VG_AUGMENTED_DATA_PATH="tequila3009/vg_augmentation_data"
-OUTPUT_DIR="models/qwen2.5-vl-3b-sft-psg"
-GPUS_PER_NODE=8
-PER_DEVICE_TRAIN_BATCH_SIZE=16
-MAX_LENGTH=0  # No truncation, preserving the previous effective behavior.
-```
-
-`USE_AUGMENTED_DATA` controls whether SFT uses augmented relations. When it is `true`, `AUGMENTED_DATA_PATH` is selected automatically from `DATASET_NAME` in the SFT script. When it is `false`, SFT uses the original `relationships` field from `DATASET_NAME`. PSG uses [tequila3009/psg_augmentation_data](https://huggingface.co/datasets/tequila3009/psg_augmentation_data), and VG uses [tequila3009/vg_augmentation_data](https://huggingface.co/datasets/tequila3009/vg_augmentation_data). The value can also be a local JSON file, a Hugging Face dataset ID, or a Hugging Face dataset URL.
+Set `USE_AUGMENTED_DATA=true` to select an augmented relation dataset from `DATASET_NAME`; set it to `false` to train directly on the source `relationships` field. `MAX_LENGTH=0` keeps the full multimodal sequence.
 
 ### 3. Reinforcement Learning
-
-Run RL training with a vLLM server and TRL:
 
 ```bash
 bash scripts/rl/run_sgg_rl.sh
 ```
 
-Key variables in `scripts/rl/run_sgg_rl.sh`:
+The default single-node layout reserves GPUs `0-5` for training and `6-7` for vLLM generation. When changing hardware allocation, update `TRAIN_CUDA_DEVICES`, `VLLM_CUDA_DEVICES`, `TRAIN_PROCESSES`, and `VLLM_TENSOR_PARALLEL_SIZE` together. Training and generation GPUs must not overlap.
 
-```bash
-VLLM_CUDA_DEVICES="6,7"
-TRAIN_CUDA_DEVICES="0,1,2,3,4,5"
-MODEL_PATH="models/qwen2.5-vl-3b-sft-psg"
-DATA_PATH="JosephZ/psg_train_sg"
-OUTPUT_DIR="models/qwen2.5vl-3b-gspo-g8-psg"
-REWARD_CONFIG_PATH="src/rl/configs/reward_config.yaml"
-TOP_P=0.9
-TOP_K=50
-TEMPERATURE=1
-NUM_GENERATIONS=8
+## Reward Configuration
+
+RL reward parameters are centralized in [`src/rl/configs/reward_config.yaml`](src/rl/configs/reward_config.yaml). TRL aggregates four callbacks in a fixed order:
+
+```text
+R = weights.format * R_format
+  + weights.category * R_category
+  + weights.node * R_node
+  + weights.edge * R_edge
 ```
 
-Reward-function parameters are defined in `src/rl/configs/reward_config.yaml`, grouped by format, category, node and edge rewards. See the [reward README](src/rl/README.md) for formulas, weights, thresholds and configuration examples. Relation frequencies are stored separately in `src/rl/configs/relation_frequencies.yaml`. Its dataset type must match `DATASET_TYPE` and the training data. The launcher uses `python -m src.rl.vllm_server`, an adapter around the TRL server that passes the same image pixel limits as the trainer. Training starts after a health check, and cleanup terminates only this launcher's server process group.
+| Stage | Purpose | YAML section |
+| --- | --- | --- |
+| Format | Validates CATEGORY, OBJECT, and RELATION JSON structure | `format_reward` |
+| Category | Computes category-level F1 | `stage1_category` |
+| Node | Scores object matching, localization, and soft recall | `matching`, `stage2_node` |
+| Edge | Scores weighted relation similarity and coarse coverage | `stage3_edge` |
 
-## Inference and Testing
+All reward weights, thresholds, penalties, fallback scores, semantic-model selection, and matching-cache settings used by the RL path are explicit YAML fields. Relation frequencies are stored in [`relation_frequencies.yaml`](src/rl/configs/relation_frequencies.yaml); its selected `vg` or `psg` table must match `DATASET_TYPE`.
 
-Run scene graph inference after SFT or RL training:
+An experiment config can override only the fields it changes:
+
+```yaml
+# reward_override.yaml
+weights:
+  edge: 2.0
+stage2_node:
+  recall:
+    iou_threshold: 0.6
+stage3_edge:
+  coarse:
+    match_threshold: 0.8
+```
 
 ```bash
+REWARD_CONFIG_PATH=/path/to/reward_override.yaml \
+  bash scripts/rl/run_sgg_rl.sh
+```
+
+Unknown fields and invalid values are rejected at startup. See the [complete reward reference](src/rl/README.md) for formulas, defaults, and migration notes. Run the CPU-only configuration test with:
+
+```bash
+python -B -m unittest discover -s tests -p test_reward_config.py
+```
+
+## Inference and Evaluation
+
+```bash
+# Inference
 MODEL_NAME="models/qwen2.5-vl-3b-sft-psg" \
-DATASET="JosephZ/psg_test_sg" bash scripts/inference/run_sgg_inference.sh
+DATASET="JosephZ/psg_test_sg" \
+bash scripts/inference/run_sgg_inference.sh
+
+# VG150 evaluation
+python src/evaluation/sgg_gather_preds_cot.py vg ./output_results ./output_results/vg150_predictions.json
+python src/evaluation/vg150_eval.py JosephZ/vg150_val_sgg_prompt ./output_results/vg150_predictions.json
+
+# PSG evaluation
+python src/evaluation/sgg_gather_preds_cot.py psg ./output_results ./output_results/psg_predictions.json
+python src/evaluation/vg150_eval.py JosephZ/psg_test_sg ./output_results/psg_predictions.json
 ```
 
-Key variables in `scripts/inference/run_sgg_inference.sh`:
+Inference writes one JSON file per image under `OUTPUT_DIR`. `sgg_gather_preds_cot.py` uses `JosephZ/psg_test_sg` by default for PSG; set `PSG_TEST_DATASET` to select another Hugging Face dataset ID or a local dataset path.
 
-```bash
-DATASET="JosephZ/vg150_val_sgg_prompt"
-MODEL_NAME="models/qwen2-vl-2b-sft-vg/checkpoint-200"
-OUTPUT_DIR="./output_results"
-BATCH_SIZE=16
-TENSOR_PARALLEL_SIZE=4
-MAX_MODEL_LEN=4096
-MAX_NEW_TOKENS=2048
-TEMPERATURE=0.1
-TOP_K=50
-TOP_P=0.95
-REPETITION_PENALTY=1.05
-```
+## Reproducibility Notes
 
-The inference script saves one JSON file per image under `OUTPUT_DIR`. Each file contains `image_id`, raw model response, ground-truth objects and relationships, and the `box_scale` used by post-processing.
+- Qwen2-VL uses normalized `[0, 1000]` boxes; Qwen2.5-VL uses image-size scaling during inference post-processing.
+- RL requires `VLLM_MAX_MODEL_LEN >= PROMPT_LENGTH_LIMIT + MAX_COMPLETION_LENGTH`.
+- Use `SAVE_ONLY_MODEL=false` when an optimizer and scheduler checkpoint is required for resuming.
+- Static and configuration checks are included; GPU training, inference, and distributed vLLM integration must be validated on the target hardware.
 
-## Evaluation
+## Acknowledgements
 
-The evaluation pipeline has two steps:
-
-1. Gather raw per-image JSON predictions into the evaluator format.
-2. Run VG150/PSG scene graph evaluation.
-
-Example for VG150:
-
-```bash
-python src/evaluation/sgg_gather_preds_cot.py \
-    vg \
-    ./output_results \
-    ./output_results/vg150_predictions.json
-
-python src/evaluation/vg150_eval.py \
-    JosephZ/vg150_val_sgg_prompt \
-    ./output_results/vg150_predictions.json
-```
-
-Example for PSG:
-
-```bash
-python src/evaluation/sgg_gather_preds_cot.py \
-    psg \
-    ./output_results \
-    ./output_results/psg_predictions.json
-
-python src/evaluation/vg150_eval.py \
-    JosephZ/psg_test_sg \
-    ./output_results/psg_predictions.json
-```
-
-`sgg_gather_preds_cot.py` uses `JosephZ/psg_test_sg` by default. Set `PSG_TEST_DATASET` to a local dataset path or another Hugging Face dataset ID when needed.
-
-The evaluator reports standard scene graph recall metrics and frequency-group statistics for long-tail relation analysis.
-
-## Notes
-
-- Qwen2-VL uses normalized box scale `[0, 1000]`; Qwen2.5-VL uses image-size box scaling in the inference post-processing path.
-- Shell scripts define important hyperparameters near the top before passing them into Python entries.
-- vLLM tensor parallel size should match the number of visible GPUs assigned to the vLLM process.
-- Large-scale SFT/RL runs require substantial GPU memory; tune `BATCH_SIZE`, `TENSOR_PARALLEL_SIZE`, `MAX_MODEL_LEN`, and DeepSpeed/FSDP configs for your hardware.
-
-## Acknowledgement
-
-We thank [gpt4vision/R1-SGG](https://github.com/gpt4vision/R1-SGG) for releasing the open-source code and Hugging Face-format scene graph datasets. This project is developed based on that work.
+This project builds on [R1-SGG](https://github.com/gpt4vision/R1-SGG) and Hugging Face-format scene graph datasets.
 
 ## Citation
-
-If you find this project useful, please cite the paper:
 
 ```bibtex
 @misc{feng2026sggr3,
@@ -298,13 +199,3 @@ If you find this project useful, please cite the paper:
   url           = {https://arxiv.org/abs/2603.07961}
 }
 ```
-
-
-
-
-
-
-
-
-
-
