@@ -206,7 +206,7 @@ TEMPERATURE=1
 NUM_GENERATIONS=8
 ```
 
-Reward-function parameters are defined in `src/rl/configs/reward_config.yaml`. Its dataset type must match `DATASET_TYPE` and the training data. The launcher uses `python -m src.rl.vllm_server`, an adapter around the TRL server that passes the same image pixel limits as the trainer. Training starts after a health check, and cleanup terminates only this launcher's server process group.
+Reward-function parameters are defined in `src/rl/configs/reward_config.yaml`, grouped by format, category, node and edge rewards. See the [reward README](src/rl/README.md) for formulas, weights, thresholds and configuration examples. Relation frequencies are stored separately in `src/rl/configs/relation_frequencies.yaml`. Its dataset type must match `DATASET_TYPE` and the training data. The launcher uses `python -m src.rl.vllm_server`, an adapter around the TRL server that passes the same image pixel limits as the trainer. Training starts after a health check, and cleanup terminates only this launcher's server process group.
 
 ## Inference and Testing
 
@@ -267,6 +267,8 @@ python src/evaluation/vg150_eval.py \
     JosephZ/psg_test_sg \
     ./output_results/psg_predictions.json
 ```
+
+`sgg_gather_preds_cot.py` uses `JosephZ/psg_test_sg` by default. Set `PSG_TEST_DATASET` to a local dataset path or another Hugging Face dataset ID when needed.
 
 The evaluator reports standard scene graph recall metrics and frequency-group statistics for long-tail relation analysis.
 

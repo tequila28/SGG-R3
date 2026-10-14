@@ -1,0 +1,109 @@
+# Original dataset frequency percentages; quoted keys avoid YAML boolean coercion.
+vg:
+  "on": 29.49
+  "has": 17.98
+  "wearing": 11.96
+  "of": 9.15
+  "in": 5.66
+  "near": 4.56
+  "behind": 3.17
+  "with": 3.16
+  "holding": 2.48
+  "above": 1.63
+  "wears": 1.25
+  "sitting on": 1.19
+  "under": 1.1
+  "in front of": 0.98
+  "riding": 0.85
+  "standing on": 0.58
+  "at": 0.45
+  "attached to": 0.39
+  "carrying": 0.37
+  "walking on": 0.34
+  "over": 0.247
+  "for": 0.2452
+  "belonging to": 0.2028
+  "hanging from": 0.1939
+  "looking at": 0.1805
+  "parked on": 0.1735
+  "laying on": 0.1687
+  "and": 0.156
+  "covering": 0.1408
+  "eating": 0.1308
+  "between": 0.1296
+  "part of": 0.1259
+  "along": 0.1256
+  "covered in": 0.1215
+  "using": 0.1129
+  "watching": 0.1103
+  "on back of": 0.0973
+  "to": 0.0906
+  "lying on": 0.0776
+  "walking in": 0.0717
+  "mounted on": 0.0661
+  "against": 0.0591
+  "across": 0.052
+  "from": 0.0505
+  "growing on": 0.0501
+  "painted on": 0.0457
+  "made of": 0.0301
+  "playing": 0.0193
+  "says": 0.0093
+  "flying in": 0.0015
+psg:
+  "on": 20.245
+  "beside": 17.21
+  "over": 15.031
+  "attached to": 7.828
+  "standing on": 7.036
+  "in front of": 4.145
+  "holding": 3.901
+  "in": 3.755
+  "walking on": 2.723
+  "parked on": 2.531
+  "driving on": 2.144
+  "sitting on": 2.021
+  "looking at": 1.948
+  "hanging from": 1.475
+  "wearing": 1.094
+  "carrying": 0.881
+  "riding": 0.762
+  "playing": 0.713
+  "lying on": 0.561
+  "eating": 0.475
+  "running on": 0.436
+  "touching": 0.361
+  "flying over": 0.321
+  "leaning on": 0.307
+  "swinging": 0.278
+  "driving": 0.225
+  "about to hit": 0.215
+  "enclosing": 0.195
+  "talking to": 0.152
+  "playing with": 0.13
+  "pulling": 0.12
+  "painted on": 0.072
+  "crossing": 0.071
+  "throwing": 0.068
+  "jumping from": 0.062
+  "biting": 0.059
+  "slicing": 0.051
+  "catching": 0.05
+  "on back of": 0.047
+  "drinking": 0.044
+  "going down": 0.042
+  "guiding": 0.032
+  "jumping over": 0.028
+  "kicking": 0.028
+  "pushing": 0.026
+  "feeding": 0.024
+  "entering": 0.018
+  "chasing": 0.014
+  "exiting": 0.01
+  "cooking": 0.007
+  "kissing": 0.006
+  "cleaning": 0.006
+  "climbing": 0.004
+  "picking": 0.003
+  "falling off": 0.003
+  "opening": 0.003

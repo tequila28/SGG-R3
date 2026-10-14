@@ -1,0 +1,84 @@
+# See ../README.md for formulas and parameter ownership.
+dataset:
+  type: psg
+
+# TRL aggregation order: format, category, node, edge.
+weights:
+  format: 1.0
+  category: 1.0
+  node: 1.0
+  edge: 1.0
+
+debug:
+  enabled: false
+  log_path: debug.log
+
+numerics:
+  epsilon: 1.0e-9
+
+semantic_model:
+  name_or_path: all-MiniLM-L6-v2
+
+# Shared assignment cost for stage2 and stage3 (GIoU, not IoU).
+matching:
+  semantic_weight: 1.0
+  iou_weight: 3.0
+  box_l1_weight: 3.0
+  padding_cost: 100000.0
+  cache_size: 4096
+
+format_reward:
+  stage_weights:
+    category: 1.0
+    object: 1.0
+    relation: 1.0
+  scores:
+    missing_tag: 0.0
+    invalid_json: 0.5
+    invalid_schema: 0.5
+    invalid_item: 0.75
+    valid_stage: 1.0
+
+stage1_category:
+  duplicate_score: 0.0
+  error_score: 0.0
+
+stage2_node:
+  box_weight: 1.0
+  recall_weight: 1.0
+  box:
+    iou_weight: 3.0
+    l1_weight: 3.0
+    l1_decay: 1.0
+  recall:
+    iou_threshold: 0.5
+    full_match_score: 1.0
+    partial_match_score: 0.5
+  empty_score: 0.0
+  error_score: 0.0
+
+stage3_edge:
+  fine_weight: 1.0
+  coarse_weight: 1.0
+  error_score: 0.0
+  relation_weight:
+    base_weight: 1.0
+    incremental_weight: 2.0
+    # Fallback for predicates absent from the selected frequency table.
+    # Kept at the original reward implementation's value.
+    default_weight: 2.0
+    frequency_floor: 0.0001
+    rounding_digits: 2
+    # Relative to this YAML, not the process working directory.
+    frequencies_path: relation_frequencies.yaml
+  coarse:
+    # Original DBSCAN eps = sqrt(2 * (1 - cluster_threshold)).
+    cluster_threshold: 0.7
+    match_threshold: 0.7
+    min_cluster_size: 1
+    density_cap: 1.0
+    reward_cap: 1.0
+    imbalance_penalty:
+      cv_threshold: 0.5
+      coefficient: 0.1
+      max_penalty: 0.5
